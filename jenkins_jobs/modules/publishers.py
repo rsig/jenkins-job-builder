@@ -6549,6 +6549,7 @@ def slack(registry, xml_parent, data):
     mapping = (
         ('team-domain', 'teamDomain', ''),
         ('auth-token', 'authToken', ''),
+        ('auth-token-id', 'authTokenCredentialId', ''),
         ('build-server-url', 'buildServerUrl', '/'),
         ('room', 'room', ''),
     )
