@@ -28,3 +28,5 @@ triggers:
       failure-status: 'failure status :('
       error-status: 'error status?!'
       cancel-builds-on-update: true
+      whitelist-labels: pending-review
+      backlist-labels: wip

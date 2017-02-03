@@ -12,6 +12,8 @@ user4</whitelist>
 org2</orgslist>
       <cron>* * * * *</cron>
       <triggerPhrase>retest this please</triggerPhrase>
+      <blackListLabels>wip</<blackListLabels>
+      <whiteListLabels>pending-review</whiteListLabels>
       <onlyTriggerPhrase>true</onlyTriggerPhrase>
       <useGitHubHooks>true</useGitHubHooks>
       <permitAll>false</permitAll>

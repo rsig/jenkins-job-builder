@@ -962,6 +962,10 @@ def github_pull_request(registry, xml_parent, data):
 
     XML.SubElement(ghprb, 'triggerPhrase').text = \
         data.get('trigger-phrase', '')
+    XML.SubElement(ghprb, 'blackListLabels').text = \
+        data.get('blacklist-labels', '')
+    XML.SubElement(ghprb, 'whiteListLabels').text = \
+        data.get('whitelist-labels', '')
     XML.SubElement(ghprb, 'onlyTriggerPhrase').text = str(
         data.get('only-trigger-phrase', False)).lower()
     XML.SubElement(ghprb, 'useGitHubHooks').text = str(
