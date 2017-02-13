@@ -59,6 +59,58 @@ from jenkins_jobs.modules.publishers import ssh
 
 logger = logging.getLogger(__name__)
 
+def github_commit_status(registry, xml_parent, data):
+    """yaml: github-commit-status
+    This publisher allows a GitHub commit to be updated with a status. This is
+    typically used to print automated test results.
+    :arg str context: The name of the test to display on the commit
+    :arg str sha: A commit SHA to use in lieu of the commit pulled from SCM
+    """
+
+    mapping = [
+        # option, class
+
+    ]
+
+    osb = XML.SubElement(xml_parent,
+        'org.jenkinsci.plugins.github.status.GitHubCommitStatusSetter')
+
+    args = [ "sha", "url", "context", "results", "backref" ]
+
+    default_classes = {
+        "sha": "BuildDataRevisionShaSource",
+        "url": "AnyDefinedRepositorySource",
+        "context": "DefaultCommitContextSource",
+        "results": "DefaultStatusResultSource",
+        "backref": "BuildRefBackrefSource"
+    }
+
+    manual_classes = {
+        "sha": "ManuallyEnteredShaSource",
+        "url": "ManuallyEnteredRepositorySource",
+        "context": "ManuallyEnteredCommitContextSource",
+        "results": "ConditionalStatusResultSource",
+        "backref": "ManuallyEnteredBackrefSource"
+    }
+
+    parent_element = {
+        "sha": "commitShaSource",
+        "url": "reposSource",
+        "context": "contextSource",
+        "results": "statusResultSource",
+        "backref": "statusBackrefSource"
+    }
+
+    for current in args:
+        if current in data:
+            new_element = XML.SubElement(osb,
+                                        parent_element[current],
+                                        {'class':'org.jenkinsci.plugins.github.status.sources.' + manual_classes[current]})
+            XML.SubElement(new_element, current).text = data[current]
+        else:
+            XML.SubElement(osb,
+                          parent_element[current],
+                          {'class':'org.jenkinsci.plugins.github.status.sources.' + default_classes[current]})
 
 def shell(registry, xml_parent, data):
     """yaml: shell

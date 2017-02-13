@@ -6805,16 +6805,50 @@ def github_commit_status(registry, xml_parent, data):
     :arg str sha: A commit SHA to use in lieu of the commit pulled from SCM
     """
 
+    mapping = [
+        # option, class
+
+    ]
+
     osb = XML.SubElement(xml_parent,
         'org.jenkinsci.plugins.github.status.GitHubCommitStatusSetter')
-    if 'sha' in data:
-        sha_source = XML.SubElement(osb, 'commitShaSource',
-            {'class':'org.jenkinsci.plugins.github.status.sources.ManuallyEnteredShaSource'})
-        XML.SubElement(sha_source, 'sha').text = data['sha']
-    if 'context' in data:
-        context_source = XML.SubElement(osb, 'contextSource',
-            {'class':'org.jenkinsci.plugins.github.status.sources.ManuallyEnteredCommitContextSource'})
-        XML.SubElement(context_source, 'context').text = data['context']
+
+    args = [ "sha", "url", "context", "results", "backref" ]
+
+    default_classes = {
+        "sha": "BuildDataRevisionShaSource",
+        "url": "AnyDefinedRepositorySource",
+        "context": "DefaultCommitContextSource",
+        "results": "DefaultStatusResultSource",
+        "backref": "BuildRefBackrefSource"
+    }
+
+    manual_classes = {
+        "sha": "ManuallyEnteredShaSource",
+        "url": "ManuallyEnteredRepositorySource",
+        "context": "ManuallyEnteredCommitContextSource",
+        "results": "ConditionalStatusResultSource",
+        "backref": "ManuallyEnteredBackrefSource"
+    }
+
+    parent_element = {
+        "sha": "commitShaSource",
+        "url": "reposSource",
+        "context": "contextSource",
+        "results": "statusResultSource",
+        "backref": "statusBackrefSource"
+    }
+
+    for current in args:
+        if current in data:
+            new_element = XML.SubElement(osb,
+                                        parent_element[current],
+                                        {'class':'org.jenkinsci.plugins.github.status.sources.' + manual_classes[current]})
+            XML.SubElement(new_element, current).text = data[current]
+        else:
+            XML.SubElement(osb,
+                          parent_element[current],
+                          {'class':'org.jenkinsci.plugins.github.status.sources.' + default_classes[current]})
 
 class Publishers(jenkins_jobs.modules.base.Base):
     sequence = 70
