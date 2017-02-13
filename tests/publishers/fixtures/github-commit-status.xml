@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+  <publishers>
+    <org.jenkinsci.plugins.github.status.GitHubCommitStatusSetter>
+      <commitShaSource class="org.jenkinsci.plugins.github.status.sources.ManuallyEnteredShaSource">
+        <sha>deadbeef</sha>
+      </commitShaSource>
+      <contextSource class="org.jenkinsci.plugins.github.status.sources.ManuallyEnteredCommitContextSource">
+        <context>TestName</context>
+      </contextSource>
+    </org.jenkinsci.plugins.github.status.GitHubCommitStatusSetter>
+  </publishers>
+</project>

@@ -6797,6 +6797,24 @@ def github_pull_request_merge(registry, xml_parent, data):
 
     helpers.convert_mapping_to_xml(osb, data, mapping, fail_required=True)
 
+def github_commit_status(registry, xml_parent, data):
+    """yaml: github-commit-status
+    This publisher allows a GitHub commit to be updated with a status. This is
+    typically used to print automated test results.
+    :arg str context: The name of the test to display on the commit
+    :arg str sha: A commit SHA to use in lieu of the commit pulled from SCM
+    """
+
+    osb = XML.SubElement(xml_parent,
+        'org.jenkinsci.plugins.github.status.GitHubCommitStatusSetter')
+    if 'sha' in data:
+        sha_source = XML.SubElement(osb, 'commitShaSource',
+            {'class':'org.jenkinsci.plugins.github.status.sources.ManuallyEnteredShaSource'})
+        XML.SubElement(sha_source, 'sha').text = data['sha']
+    if 'context' in data:
+        context_source = XML.SubElement(osb, 'contextSource',
+            {'class':'org.jenkinsci.plugins.github.status.sources.ManuallyEnteredCommitContextSource'})
+        XML.SubElement(context_source, 'context').text = data['context']
 
 class Publishers(jenkins_jobs.modules.base.Base):
     sequence = 70
