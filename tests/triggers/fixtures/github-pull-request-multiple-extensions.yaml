@@ -11,6 +11,8 @@ triggers:
         - org2
       cron: '* * * * *'
       trigger-phrase: 'retest this please'
+      whitelist-labels: pending-review
+      blacklist-labels: wip
       only-trigger-phrase: true
       github-hooks: true
       permit-all: false
@@ -28,5 +30,3 @@ triggers:
       failure-status: 'failure status :('
       error-status: 'error status?!'
       cancel-builds-on-update: true
-      whitelist-labels: pending-review
-      backlist-labels: wip
