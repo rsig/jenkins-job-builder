@@ -63,10 +63,12 @@ def builds_chain_fingerprinter(registry, xml_parent, data):
                                    'org.jenkinsci.plugins.'
                                    'buildschainfingerprinter.'
                                    'AutomaticFingerprintJobProperty')
-    XML.SubElement(fingerprinter, 'isPerBuildsChainEnabled').text = str(
-        data.get('per-builds-chain', False)).lower()
-    XML.SubElement(fingerprinter, 'isPerJobsChainEnabled').text = str(
-        data.get('per-job-chain', False)).lower()
+    mapping = [
+        ('per-builds-chain', 'isPerBuildsChainEnabled', False),
+        ('per-job-chain', 'isPerJobsChainEnabled', False),
+    ]
+    helpers.convert_mapping_to_xml(
+        fingerprinter, data, mapping, fail_required=True)
 
 
 def ownership(registry, xml_parent, data):
@@ -198,10 +200,10 @@ def gitlab(registry, xml_parent, data):
     gitlab = XML.SubElement(xml_parent,
                             'com.dabsquared.gitlabjenkins.connection.'
                             'GitLabConnectionProperty')
-    try:
-        XML.SubElement(gitlab, 'gitLabConnection').text = data['connection']
-    except KeyError as e:
-        raise MissingAttributeError(e)
+    mapping = [
+        ('connection', 'gitLabConnection', None)
+    ]
+    helpers.convert_mapping_to_xml(gitlab, data, mapping, fail_required=True)
 
 
 def least_load(registry, xml_parent, data):
@@ -219,9 +221,9 @@ def least_load(registry, xml_parent, data):
     least = XML.SubElement(xml_parent,
                            'org.bstick12.jenkinsci.plugins.leastload.'
                            'LeastLoadDisabledProperty')
-
-    XML.SubElement(least, 'leastLoadDisabled').text = str(
-        data.get('disabled', True)).lower()
+    mapping = [
+        ('disabled', 'leastLoadDisabled', True)]
+    helpers.convert_mapping_to_xml(least, data, mapping, fail_required=True)
 
 
 def throttle(registry, xml_parent, data):
@@ -247,14 +249,12 @@ def throttle(registry, xml_parent, data):
     throttle = XML.SubElement(xml_parent,
                               'hudson.plugins.throttleconcurrents.'
                               'ThrottleJobProperty')
-    XML.SubElement(throttle, 'maxConcurrentPerNode').text = str(
-        data.get('max-per-node', '0'))
-    XML.SubElement(throttle, 'maxConcurrentTotal').text = str(
-        data.get('max-total', '0'))
-    # TODO: What's "categories"?
-    # XML.SubElement(throttle, 'categories')
-    XML.SubElement(throttle, 'throttleEnabled').text = str(
-        data.get('enabled', True)).lower()
+    mapping = [
+        ('max-per-node', 'maxConcurrentPerNode', '0'),
+        ('max-total', 'maxConcurrentTotal', '0'),
+        ('enabled', 'throttleEnabled', True),
+    ]
+    helpers.convert_mapping_to_xml(throttle, data, mapping, fail_required=True)
     cat = data.get('categories', [])
     if cat:
         cn = XML.SubElement(throttle, 'categories')
@@ -265,15 +265,19 @@ def throttle(registry, xml_parent, data):
     option = data.get('option')
     if option not in options_list:
         raise InvalidAttributeError('option', option, options_list)
-
-    XML.SubElement(throttle, 'throttleOption').text = option
-    XML.SubElement(throttle, 'configVersion').text = '1'
+    mapping = [
+        ('', 'throttleOption', option),
+        ('', 'configVersion', '1'),
+    ]
+    helpers.convert_mapping_to_xml(throttle, data, mapping, fail_required=True)
 
     matrixopt = XML.SubElement(throttle, 'matrixOptions')
-    XML.SubElement(matrixopt, 'throttleMatrixBuilds').text = str(
-        data.get('matrix-builds', True)).lower()
-    XML.SubElement(matrixopt, 'throttleMatrixConfigurations').text = str(
-        data.get('matrix-configs', False)).lower()
+    mapping = [
+        ('matrix-builds', 'throttleMatrixBuilds', True),
+        ('matrix-configs', 'throttleMatrixConfigurations', False)
+    ]
+    helpers.convert_mapping_to_xml(
+        matrixopt, data, mapping, fail_required=True)
 
 
 def sidebar(registry, xml_parent, data):
@@ -299,9 +303,12 @@ def sidebar(registry, xml_parent, data):
     else:
         links = sidebar.find('links')
     action = XML.SubElement(links, 'hudson.plugins.sidebar__link.LinkAction')
-    XML.SubElement(action, 'url').text = str(data.get('url', ''))
-    XML.SubElement(action, 'text').text = str(data.get('text', ''))
-    XML.SubElement(action, 'icon').text = str(data.get('icon', ''))
+    mapping = [
+        ('url', 'url', ''),
+        ('text', 'text', ''),
+        ('icon', 'icon', ''),
+    ]
+    helpers.convert_mapping_to_xml(action, data, mapping, fail_required=True)
 
 
 def inject(registry, xml_parent, data):
@@ -331,27 +338,23 @@ def inject(registry, xml_parent, data):
                             'EnvInjectJobProperty')
     info = XML.SubElement(inject, 'info')
 
-    jenkins_jobs.modules.base.add_nonblank_xml_subelement(
-        info, 'propertiesFilePath', data.get('properties-file'))
-    jenkins_jobs.modules.base.add_nonblank_xml_subelement(
-        info, 'propertiesContent', data.get('properties-content'))
-    jenkins_jobs.modules.base.add_nonblank_xml_subelement(
-        info, 'scriptFilePath', data.get('script-file'))
-    jenkins_jobs.modules.base.add_nonblank_xml_subelement(
-        info, 'scriptContent', data.get('script-content'))
-    jenkins_jobs.modules.base.add_nonblank_xml_subelement(
-        info, 'groovyScriptContent', data.get('groovy-content'))
+    mapping = [
+        ('properties-file', 'propertiesFilePath', None),
+        ('properties-content', 'propertiesContent', None),
+        ('script-file', 'scriptFilePath', None),
+        ('script-content', 'scriptContent', None),
+        ('groovy-content', 'groovyScriptContent', None),
+        ('load-from-master', 'loadFilesFromMaster', False),
+    ]
+    helpers.convert_mapping_to_xml(info, data, mapping, fail_required=False)
 
-    XML.SubElement(info, 'loadFilesFromMaster').text = str(
-        data.get('load-from-master', False)).lower()
-    XML.SubElement(inject, 'on').text = str(
-        data.get('enabled', True)).lower()
-    XML.SubElement(inject, 'keepJenkinsSystemVariables').text = str(
-        data.get('keep-system-variables', True)).lower()
-    XML.SubElement(inject, 'keepBuildVariables').text = str(
-        data.get('keep-build-variables', True)).lower()
-    XML.SubElement(inject, 'overrideBuildParameters').text = str(
-        data.get('override-build-parameters', False)).lower()
+    mapping = [
+        ('enabled', 'on', True),
+        ('keep-system-variables', 'keepJenkinsSystemVariables', True),
+        ('keep-build-variables', 'keepBuildVariables', True),
+        ('override-build-parameters', 'overrideBuildParameters', False),
+    ]
+    helpers.convert_mapping_to_xml(inject, data, mapping, fail_required=True)
 
 
 def authenticated_build(registry, xml_parent, data):
@@ -467,11 +470,9 @@ def priority_sorter(registry, xml_parent, data):
     priority_sorter_tag = XML.SubElement(xml_parent,
                                          'hudson.queueSorter.'
                                          'PrioritySorterJobProperty')
-    try:
-        XML.SubElement(priority_sorter_tag, 'priority').text = str(
-            data['priority'])
-    except KeyError as e:
-        raise MissingAttributeError(e)
+    mapping = [('priority', 'priority', None)]
+    helpers.convert_mapping_to_xml(
+        priority_sorter_tag, data, mapping, fail_required=True)
 
 
 def build_blocker(registry, xml_parent, data):
@@ -590,8 +591,12 @@ def batch_tasks(registry, xml_parent, data):
     for task in data:
         batch_task = XML.SubElement(tasks,
                                     'hudson.plugins.batch__task.BatchTask')
-        XML.SubElement(batch_task, 'name').text = task['name']
-        XML.SubElement(batch_task, 'script').text = task['script']
+        mapping = [
+            ('name', 'name', None),
+            ('script', 'script', None),
+        ]
+        helpers.convert_mapping_to_xml(
+            batch_task, task, mapping, fail_required=True)
 
 
 def heavy_job(registry, xml_parent, data):
@@ -613,8 +618,8 @@ def heavy_job(registry, xml_parent, data):
     heavyjob = XML.SubElement(xml_parent,
                               'hudson.plugins.'
                               'heavy__job.HeavyJobProperty')
-    XML.SubElement(heavyjob, 'weight').text = str(
-        data.get('weight', 1))
+    mapping = [('weight', 'weight', 1)]
+    helpers.convert_mapping_to_xml(heavyjob, data, mapping, fail_required=True)
 
 
 def slave_utilization(registry, xml_parent, data):
@@ -639,13 +644,16 @@ def slave_utilization(registry, xml_parent, data):
     """
     utilization = XML.SubElement(
         xml_parent, 'com.suryagaddipati.jenkins.SlaveUtilizationProperty')
+
     percent = int(data.get('slave-percentage', 0))
-    XML.SubElement(utilization, 'needsExclusiveAccessToNode'
-                   ).text = 'true' if percent else 'false'
-    XML.SubElement(utilization, 'slaveUtilizationPercentage'
-                   ).text = str(percent)
-    XML.SubElement(utilization, 'singleInstancePerSlave').text = str(
-        data.get('single-instance-per-slave', False)).lower()
+    exclusive_node_access = True if percent else False
+
+    mapping = [
+        ('', 'needsExclusiveAccessToNode', exclusive_node_access),
+        ('', 'slaveUtilizationPercentage', percent),
+        ('single-instance-per-slave', 'singleInstancePerSlave', False)]
+    helpers.convert_mapping_to_xml(
+        utilization, data, mapping, fail_required=True)
 
 
 def delivery_pipeline(registry, xml_parent, data):
@@ -701,7 +709,9 @@ def zeromq_event(registry, xml_parent, data):
     zmq_event = XML.SubElement(xml_parent,
                                'org.jenkinsci.plugins.'
                                'ZMQEventPublisher.HudsonNotificationProperty')
-    XML.SubElement(zmq_event, 'enabled').text = 'true'
+    mapping = [('', 'enabled', True)]
+    helpers.convert_mapping_to_xml(
+        zmq_event, data, mapping, fail_required=True)
 
 
 def slack(registry, xml_parent, data):
@@ -724,7 +734,7 @@ def slack(registry, xml_parent, data):
         (default false)
     :arg bool notify-failure: Send notification when job fails.
         (default false)
-    :arg bool notifiy-back-to-normal: Send notification when job is
+    :arg bool notify-back-to-normal: Send notification when job is
         succeeding again after being unstable or failed. (default false)
     :arg bool 'notify-repeated-failure': Send notification when job is
         still failing after last failure. (default false)
@@ -991,6 +1001,45 @@ def lockable_resources(registry, xml_parent, data):
     ]
     helpers.convert_mapping_to_xml(
         lockable_resources, data, mapping, fail_required=True)
+
+
+def docker_container(registry, xml_parent, data):
+    """yaml: docker-container
+    Requires the Jenkins: :jenkins-wiki:`Docker Plugin<Docker+Plugin>`.
+
+    :arg bool commit-on-success: When a job completes, the docker slave
+        instance is committed with repository based on the job name and build
+        number as tag. (default false)
+    :arg str additional-tag: Additional tag to apply to the docker slave
+        instance when committing it. (default '')
+    :arg bool push-on-success: Also push the resulting image when committing
+        the docker slave instance. (default false)
+    :arg bool clean-local-images: Clean images from the local daemon after
+        building. (default true)
+
+    Minimal Example:
+
+    .. literalinclude::
+        /../../tests/properties/fixtures/docker-container-minimal.yaml
+        :language: yaml
+
+    Full Example:
+
+    .. literalinclude::
+        /../../tests/properties/fixtures/docker-container-full.yaml
+        :language: yaml
+    """
+    xml_docker = XML.SubElement(
+        xml_parent, 'com.nirima.jenkins.plugins.docker.DockerJobProperty')
+
+    mapping = [
+        ('commit-on-success', 'tagOnCompletion', False),
+        ('additional-tag', 'additionalTag', ''),
+        ('push-on-success', 'pushOnSuccess', False),
+        ('clean-local-images', 'cleanImages', True)
+    ]
+    helpers.convert_mapping_to_xml(
+        xml_docker, data, mapping, fail_required=True)
 
 
 class Properties(jenkins_jobs.modules.base.Base):

@@ -21,6 +21,7 @@ import re
 from string import Formatter
 
 from jenkins_jobs.errors import JenkinsJobsException
+from jenkins_jobs.local_yaml import CustomLoader
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +41,12 @@ def deep_format(obj, paramdict, allow_empty=False):
             desc = "%s parameter missing to format %s\nGiven:\n%s" % (
                 missing_key, obj, pformat(paramdict))
             raise JenkinsJobsException(desc)
+        except Exception:
+            logging.error("Problem formatting with args:\nallow_empty:"
+                          "%s\nobj: %s\nparamdict: %s" %
+                          (allow_empty, obj, paramdict))
+            raise
+
     elif isinstance(obj, list):
         ret = type(obj)()
         for item in obj:
@@ -55,8 +62,17 @@ def deep_format(obj, paramdict, allow_empty=False):
                 desc = "%s parameter missing to format %s\nGiven:\n%s" % (
                     missing_key, obj, pformat(paramdict))
                 raise JenkinsJobsException(desc)
+            except Exception:
+                logging.error("Problem formatting with args:\nallow_empty:"
+                              "%s\nobj: %s\nparamdict: %s" %
+                              (allow_empty, obj, paramdict))
+                raise
     else:
         ret = obj
+    if isinstance(ret, CustomLoader):
+        # If we have a CustomLoader here, we've lazily-loaded a template;
+        # attempt to format it.
+        ret = deep_format(ret, paramdict, allow_empty=allow_empty)
     return ret
 
 

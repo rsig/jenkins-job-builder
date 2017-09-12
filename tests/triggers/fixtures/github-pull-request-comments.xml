@@ -10,11 +10,14 @@ user2</adminlist>
 user4</whitelist>
       <orgslist>org1
 org2</orgslist>
+      <whiteListLabels/>
+      <blackListLabels/>
       <cron>* * * * *</cron>
       <triggerPhrase>retest this please</triggerPhrase>
+      <skipBuildPhrase/>
+      <onlyTriggerPhrase>true</onlyTriggerPhrase>
       <blackListLabels>wip</blackListLabels>
       <whiteListLabels>pending-review</whiteListLabels>
-      <onlyTriggerPhrase>true</onlyTriggerPhrase>
       <useGitHubHooks>true</useGitHubHooks>
       <permitAll>false</permitAll>
       <autoCloseFailedPullRequests>false</autoCloseFailedPullRequests>

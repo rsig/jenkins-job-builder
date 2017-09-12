@@ -41,7 +41,6 @@ import xml.etree.ElementTree as XML
 
 from jenkins_jobs.errors import InvalidAttributeError
 from jenkins_jobs.errors import JenkinsJobsException
-from jenkins_jobs.errors import MissingAttributeError
 import jenkins_jobs.modules.base
 from jenkins_jobs.modules.helpers import convert_mapping_to_xml
 
@@ -170,6 +169,8 @@ def git(registry, xml_parent, data):
         * **scm-name** (`string`) - The unique scm name for this Git SCM
             (optional)
         * **shallow-clone** (`bool`) - Perform shallow clone (default false)
+        * **do-not-fetch-tags** (`bool`) - Perform a clone without tags
+            (default false)
         * **sparse-checkout** (`dict`)
             * **paths** (`list`) - List of paths to sparse checkout. (optional)
         * **submodule** (`dict`)
@@ -373,10 +374,18 @@ def git(registry, xml_parent, data):
     if 'scm-name' in data:
         ext = XML.SubElement(exts_node, impl_prefix + 'ScmName')
         XML.SubElement(ext, 'name').text = str(data['scm-name'])
-    if 'shallow-clone' in data or 'timeout' in data:
+    clone_options = (
+        "shallow-clone",
+        "timeout",
+        "do-not-fetch-tags"
+    )
+    if any(key in data for key in clone_options):
         clo = XML.SubElement(exts_node, impl_prefix + 'CloneOption')
         XML.SubElement(clo, 'shallow').text = str(
             data.get('shallow-clone', False)).lower()
+        if 'do-not-fetch-tags' in data:
+            XML.SubElement(clo, 'noTags').text = str(
+                data.get('do-not-fetch-tags', False)).lower()
         if 'timeout' in data:
             XML.SubElement(clo, 'timeout').text = str(data['timeout'])
     if 'sparse-checkout' in data:
@@ -546,21 +555,21 @@ def cvs(registry, xml_parent, data):
     """
     prefix = 'hudson.scm.'
     valid_loc_types = {'HEAD': 'Head', 'TAG': 'Tag', 'BRANCH': 'Branch'}
+
     cvs = XML.SubElement(xml_parent, 'scm', {'class': prefix + 'CVSSCM'})
     repos = data.get('repos')
-    if not repos:
-        raise JenkinsJobsException("'repos' empty or missing")
     repos_tag = XML.SubElement(cvs, 'repositories')
     for repo in repos:
         repo_tag = XML.SubElement(repos_tag, prefix + 'CvsRepository')
-        try:
-            XML.SubElement(repo_tag, 'cvsRoot').text = repo['root']
-        except KeyError:
-            raise MissingAttributeError('root')
+
+        compression_level = repo.get('compression-level', '-1')
+        repo_mapping = [('root', 'cvsRoot', None),
+            ('', 'compressionLevel', int(compression_level), range(-1, 10))]
+        convert_mapping_to_xml(repo_tag,
+            repo, repo_mapping, fail_required=True)
+
         items_tag = XML.SubElement(repo_tag, 'repositoryItems')
         locations = repo.get('locations')
-        if not locations:
-            raise JenkinsJobsException("'locations' empty or missing")
         for location in locations:
             item_tag = XML.SubElement(items_tag, prefix + 'CvsRepositoryItem')
             loc_type = location.get('type', 'HEAD')
@@ -570,36 +579,34 @@ def cvs(registry, xml_parent, data):
                          'Location').format(prefix, valid_loc_types[loc_type])
             loc_tag = XML.SubElement(item_tag, 'location',
                                      {'class': loc_class})
-            XML.SubElement(loc_tag, 'locationType').text = loc_type
-            if loc_type == 'TAG' or loc_type == 'BRANCH':
-                XML.SubElement(loc_tag, 'locationName').text = location.get(
-                    'name', '')
-                XML.SubElement(loc_tag, 'useHeadIfNotFound').text = str(
-                    location.get('use-head', False)).lower()
+            mapping = [('type', 'locationType', 'HEAD')]
+            convert_mapping_to_xml(
+                loc_tag, location, mapping, fail_required=True)
+
+            if loc_type != 'HEAD':
+                mapping = [
+                    ('name', 'locationName', ''),
+                    ('use-head', 'useHeadIfNotFound', False)]
+                convert_mapping_to_xml(
+                    loc_tag, location, mapping, fail_required=True)
+
             modules = location.get('modules')
-            if not modules:
-                raise JenkinsJobsException("'modules' empty or missing")
             modules_tag = XML.SubElement(item_tag, 'modules')
             for module in modules:
                 module_tag = XML.SubElement(modules_tag, prefix + 'CvsModule')
-                try:
-                    XML.SubElement(module_tag, 'remoteName'
-                                   ).text = module['remote']
-                except KeyError:
-                    raise MissingAttributeError('remote')
-                XML.SubElement(module_tag, 'localName').text = module.get(
-                    'local-name', '')
+                mapping = [
+                    ('remote', 'remoteName', None),
+                    ('local-name', 'localName', '')]
+                convert_mapping_to_xml(
+                    module_tag, module, mapping, fail_required=True)
+
         excluded = repo.get('excluded-regions', [])
         excluded_tag = XML.SubElement(repo_tag, 'excludedRegions')
         for pattern in excluded:
             pattern_tag = XML.SubElement(excluded_tag,
                                          prefix + 'ExcludedRegion')
             XML.SubElement(pattern_tag, 'pattern').text = pattern
-        compression_level = repo.get('compression-level', '-1')
-        if int(compression_level) not in range(-1, 10):
-            raise InvalidAttributeError('compression-level',
-                                        compression_level, range(-1, 10))
-        XML.SubElement(repo_tag, 'compressionLevel').text = compression_level
+
     mappings = [
         ('use-update', 'canUseUpdate', True),
         ('prune-empty', 'pruneEmptyDirectories', True),
@@ -714,44 +721,38 @@ def store(registry, xml_parent, data):
 
     .. literalinclude:: /../../tests/scm/fixtures/store001.yaml
     """
+
     namespace = 'org.jenkinsci.plugins.visualworks_store'
     scm = XML.SubElement(xml_parent, 'scm',
                          {'class': '{0}.StoreSCM'.format(namespace)})
-    if 'script' in data:
-        XML.SubElement(scm, 'scriptName').text = data['script']
-    else:
-        raise JenkinsJobsException("Must specify a script name")
-    if 'repository' in data:
-        XML.SubElement(scm, 'repositoryName').text = data['repository']
-    else:
-        raise JenkinsJobsException("Must specify a repository name")
+    mapping = [
+        ('script', 'scriptName', None),
+        ('repository', 'repositoryName', None)]
+    convert_mapping_to_xml(scm, data, mapping, fail_required=True)
+
     pundle_specs = data.get('pundles', [])
     if not pundle_specs:
         raise JenkinsJobsException("At least one pundle must be specified")
-    valid_pundle_types = ['package', 'bundle']
+    valid_pundle_types = ['PACKAGE', 'BUNDLE']
     pundles = XML.SubElement(scm, 'pundles')
+
     for pundle_spec in pundle_specs:
         pundle = XML.SubElement(pundles, '{0}.PundleSpec'.format(namespace))
         pundle_type = next(iter(pundle_spec))
         pundle_name = pundle_spec[pundle_type]
-        if pundle_type not in valid_pundle_types:
-            raise JenkinsJobsException(
-                'pundle type must be must be one of: '
-                + ', '.join(valid_pundle_types))
-        else:
-            XML.SubElement(pundle, 'name').text = pundle_name
-            XML.SubElement(pundle, 'pundleType').text = pundle_type.upper()
-    if 'version-regex' in data:
-        XML.SubElement(scm, 'versionRegex').text = data['version-regex']
-    if 'minimum-blessing' in data:
-        XML.SubElement(scm, 'minimumBlessingLevel').text = \
-            data['minimum-blessing']
-    if 'parcel-builder-file' in data:
-        XML.SubElement(scm, 'generateParcelBuilderInputFile').text = 'true'
-        XML.SubElement(scm, 'parcelBuilderInputFilename').text = \
-            data['parcel-builder-file']
-    else:
-        XML.SubElement(scm, 'generateParcelBuilderInputFile').text = 'false'
+        mapping = [
+            ('', 'name', pundle_name),
+            ('', 'pundleType', pundle_type.upper(), valid_pundle_types)]
+        convert_mapping_to_xml(pundle, data, mapping, fail_required=True)
+
+    generate_parcel = True if 'parcel-builder-file' else False
+    mapping_optional = [
+        ('version-regex', 'versionRegex', None),
+        ('minimum-blessing', 'minimumBlessingLevel', None),
+        ('', 'generateParcelBuilderInputFile', generate_parcel),
+        ('parcel-builder-file', 'parcelBuilderInputFilename', None)]
+    convert_mapping_to_xml(scm,
+        data, mapping_optional, fail_required=False)
 
 
 def svn(registry, xml_parent, data):
@@ -1002,19 +1003,14 @@ def workspace(registry, xml_parent, data):
 
     workspace = XML.SubElement(xml_parent, 'scm', {'class': 'hudson.plugins.'
                                'cloneworkspace.CloneWorkspaceSCM'})
-    XML.SubElement(workspace, 'parentJobName').text = str(
-        data.get('parent-job', ''))
-
     criteria_list = ['Any', 'Not Failed', 'Successful']
 
     criteria = data.get('criteria', 'Any').title()
 
-    if 'criteria' in data and criteria not in criteria_list:
-        raise JenkinsJobsException(
-            'clone-workspace criteria must be one of: '
-            + ', '.join(criteria_list))
-    else:
-        XML.SubElement(workspace, 'criteria').text = criteria
+    mapping = [
+        ('parent-job', 'parentJobName', ''),
+        ('', 'criteria', criteria, criteria_list)]
+    convert_mapping_to_xml(workspace, data, mapping, fail_required=True)
 
 
 def hg(self, xml_parent, data):
@@ -1022,7 +1018,7 @@ def hg(self, xml_parent, data):
     Specifies the mercurial SCM repository for this job.
     Requires the Jenkins :jenkins-wiki:`Mercurial Plugin <Mercurial+Plugin>`.
 
-    :arg str url: URL of the hg repository
+    :arg str url: URL of the hg repository (required)
     :arg str credentials-id: ID of credentials to use to connect (optional)
     :arg str revision-type: revision type to use (default 'branch')
     :arg str revision: the branch or tag name you would like to track
@@ -1056,43 +1052,11 @@ def hg(self, xml_parent, data):
 
     .. literalinclude:: ../../tests/scm/fixtures/hg02.yaml
     """
-    scm = XML.SubElement(xml_parent, 'scm', {'class':
-                         'hudson.plugins.mercurial.MercurialSCM'})
-    if 'url' in data:
-        XML.SubElement(scm, 'source').text = data['url']
-    else:
-        raise JenkinsJobsException("A top level url must exist")
-
-    if 'credentials-id' in data:
-        XML.SubElement(scm, 'credentialsId').text = data['credentials-id']
 
     revision_type_dict = {
         'branch': 'BRANCH',
         'tag': 'TAG',
     }
-    try:
-        revision_type = revision_type_dict[data.get('revision-type', 'branch')]
-    except KeyError:
-        raise JenkinsJobsException('Invalid revision-type %r' %
-                                   data.get('revision-type'))
-    XML.SubElement(scm, 'revisionType').text = revision_type
-
-    XML.SubElement(scm, 'revision').text = data.get('revision', 'default')
-
-    if 'subdir' in data:
-        XML.SubElement(scm, 'subdir').text = data['subdir']
-
-    xc = XML.SubElement(scm, 'clean')
-    xc.text = str(data.get('clean', False)).lower()
-
-    modules = data.get('modules', '')
-    if isinstance(modules, list):
-        modules = " ".join(modules)
-    XML.SubElement(scm, 'modules').text = modules
-
-    xd = XML.SubElement(scm, 'disableChangeLog')
-    xd.text = str(data.get('disable-changelog', False)).lower()
-
     browser = data.get('browser', 'auto')
     browserdict = {
         'auto': '',
@@ -1106,18 +1070,32 @@ def hg(self, xml_parent, data):
         'rhodecode-pre-1.2.0': 'RhodeCodeLegacy'
     }
 
-    if browser not in browserdict:
-        raise JenkinsJobsException("Browser entered is not valid must be one "
-                                   "of: %s" % ", ".join(browserdict.keys()))
+    scm = XML.SubElement(xml_parent, 'scm', {'class':
+                         'hudson.plugins.mercurial.MercurialSCM'})
+    mapping = [('url', 'source', None)]
+    convert_mapping_to_xml(scm, data, mapping, fail_required=True)
+
+    mapping_optional = [
+        ('credentials-id', 'credentialsId', None),
+        ('revision-type', 'revisionType', 'branch', revision_type_dict),
+        ('revision', 'revision', 'default'),
+        ('subdir', 'subdir', None),
+        ('clean', 'clean', False)]
+    convert_mapping_to_xml(scm, data, mapping_optional, fail_required=False)
+
+    modules = data.get('modules', '')
+    if isinstance(modules, list):
+        modules = " ".join(modules)
+    XML.SubElement(scm, 'modules').text = modules
+    XML.SubElement(scm, 'disableChangeLog').text = str(data.get(
+        'disable-changelog', False)).lower()
+
     if browser != 'auto':
         bc = XML.SubElement(scm, 'browser',
                             {'class': 'hudson.plugins.mercurial.browser.' +
                                       browserdict[browser]})
-        if 'browser-url' in data:
-            XML.SubElement(bc, 'url').text = data['browser-url']
-        else:
-            raise JenkinsJobsException("A browser-url must be specified along "
-                                       "with browser.")
+        mapping = [('browser-url', 'url', None, browserdict[browser])]
+        convert_mapping_to_xml(bc, data, mapping, fail_required=True)
 
 
 def openshift_img_streams(registry, xml_parent, data):
@@ -1228,10 +1206,13 @@ def bzr(registry, xml_parent, data):
         'browser',
         {'class': 'hudson.plugins.bazaar.browsers.{0}'.format(
             browser_name_to_class[browser])})
-    XML.SubElement(browser_element, 'url').text = data['browser-url']
+    mapping = [('browser-url', 'url', None)]
+    convert_mapping_to_xml(browser_element, data, mapping, fail_required=True)
+
     if browser == 'opengrok':
-        XML.SubElement(browser_element, 'rootModule').text = (
-            data['opengrok-root-module'])
+        mapping = [('opengrok-root-module', 'rootModule', None)]
+        convert_mapping_to_xml(browser_element,
+            data, mapping, fail_required=True)
 
 
 def url(registry, xml_parent, data):
@@ -1255,15 +1236,13 @@ def url(registry, xml_parent, data):
     scm = XML.SubElement(xml_parent, 'scm', {'class':
                          'hudson.plugins.URLSCM.URLSCM'})
     urls = XML.SubElement(scm, 'urls')
-    try:
-        for data_url in data['url-list']:
-            url_tuple = XML.SubElement(
-                urls, 'hudson.plugins.URLSCM.URLSCM_-URLTuple')
-            XML.SubElement(url_tuple, 'urlString').text = data_url
-    except KeyError as e:
-        raise MissingAttributeError(e.args[0])
-    XML.SubElement(scm, 'clearWorkspace').text = str(
-        data.get('clear-workspace', False)).lower()
+    for data_url in data['url-list']:
+        url_tuple = XML.SubElement(
+            urls, 'hudson.plugins.URLSCM.URLSCM_-URLTuple')
+        mapping = [('', 'urlString', data_url)]
+        convert_mapping_to_xml(url_tuple, data, mapping, fail_required=True)
+    mapping = [('clear-workspace', 'clearWorkspace', False)]
+    convert_mapping_to_xml(scm, data, mapping, fail_required=True)
 
 
 def dimensions(registry, xml_parent, data):

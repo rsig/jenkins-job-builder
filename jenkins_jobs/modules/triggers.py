@@ -166,24 +166,23 @@ def build_gerrit_triggers(xml_parent, data):
                 pc = XML.SubElement(
                     trigger_on_events,
                     '%s.%s' % (tag_namespace, 'PluginPatchsetCreatedEvent'))
-                XML.SubElement(pc, 'excludeDrafts').text = str(
-                    pce.get('exclude-drafts', False)).lower()
-                XML.SubElement(pc, 'excludeTrivialRebase').text = str(
-                    pce.get('exclude-trivial-rebase', False)).lower()
-                XML.SubElement(pc, 'excludeNoCodeChange').text = str(
-                    pce.get('exclude-no-code-change', False)).lower()
+                mapping = [
+                    ('exclude-drafts', 'excludeDrafts', False),
+                    ('exclude-trivial-rebase', 'excludeTrivialRebase', False),
+                    ('exclude-no-code-change', 'excludeNoCodeChange', False)]
+                convert_mapping_to_xml(pc, pce, mapping, fail_required=True)
 
             if 'comment-added-event' in event.keys():
                 comment_added_event = event['comment-added-event']
                 cadded = XML.SubElement(
                     trigger_on_events,
                     '%s.%s' % (tag_namespace, 'PluginCommentAddedEvent'))
-                XML.SubElement(cadded, 'verdictCategory').text = \
-                    comment_added_event['approval-category']
-                XML.SubElement(
-                    cadded,
-                    'commentAddedTriggerApprovalValue').text = \
-                    str(comment_added_event['approval-value'])
+                mapping = [
+                    ('approval-category', 'verdictCategory', None),
+                    ('approval-value',
+                        'commentAddedTriggerApprovalValue', None)]
+                convert_mapping_to_xml(cadded,
+                    comment_added_event, mapping, fail_required=True)
 
             if 'comment-added-contains-event' in event.keys():
                 comment_added_event = event['comment-added-contains-event']
@@ -782,6 +781,8 @@ def jms_messaging(registry, xml_parent, data):
     The JMS Messaging Plugin provides the following functionality:
      - A build trigger to submit jenkins jobs upon receipt
        of a matching message.
+     - A builder that may be used to submit a message to the topic
+       upon the completion of a job
      - A post-build action that may be used to submit a message to the topic
        upon the completion of a job
 
@@ -833,12 +834,11 @@ def jms_messaging(registry, xml_parent, data):
         for check in checks:
             msgcheck = XML.SubElement(msgchecks, namespace
                                       + 'messaging.checks.MsgCheck')
-            if check['field'] is '':
-                raise JenkinsJobsException('At least one '
-                                           'field must be provided')
-            XML.SubElement(msgcheck, 'field').text = check['field']
-            XML.SubElement(msgcheck,
-                           'expectedValue').text = check['expected-value']
+            mapping = [
+                ('field', 'field', ''),
+                ('expected-value', 'expectedValue', '')]
+            convert_mapping_to_xml(
+                msgcheck, check, mapping, fail_required=True)
 
 
 def timed(registry, xml_parent, data):
@@ -902,6 +902,12 @@ def github_pull_request(registry, xml_parent, data):
         in the pull request will trigger a build (optional)
     :arg bool only-trigger-phrase: only commenting the trigger phrase
         in the pull request will trigger a build (default false)
+    :arg string skip-build-phrase: when filled, adding this phrase to
+        the pull request title or body will not trigger a build (optional)
+    :arg string black-list-labels: list of GitHub labels for which the build
+        should not be triggered (optional)
+    :arg string white-list-labels: list of GitHub labels for which the build
+        should only be triggered. (Leave blank for 'any') (optional)
     :arg bool github-hooks: use github hook (default false)
     :arg bool permit-all: build every pull request automatically
         without asking (default false)
@@ -941,6 +947,7 @@ def github_pull_request(registry, xml_parent, data):
     Example:
 
     .. literalinclude:: /../../tests/triggers/fixtures/github-pull-request.yaml
+
     """
     ghprb = XML.SubElement(xml_parent, 'org.jenkinsci.plugins.ghprb.'
                            'GhprbTrigger')
@@ -953,6 +960,10 @@ def github_pull_request(registry, xml_parent, data):
     XML.SubElement(ghprb, 'whitelist').text = white_string
     org_string = "\n".join(data.get('org-list', []))
     XML.SubElement(ghprb, 'orgslist').text = org_string
+    white_list_labels_string = "\n".join(data.get('white-list-labels', []))
+    XML.SubElement(ghprb, 'whiteListLabels').text = white_list_labels_string
+    black_list_labels_string = "\n".join(data.get('black-list-labels', []))
+    XML.SubElement(ghprb, 'blackListLabels').text = black_list_labels_string
     XML.SubElement(ghprb, 'cron').text = data.get('cron', '')
 
     build_desc_template = data.get('build-desc-template', '')
@@ -962,12 +973,14 @@ def github_pull_request(registry, xml_parent, data):
 
     XML.SubElement(ghprb, 'triggerPhrase').text = \
         data.get('trigger-phrase', '')
+    XML.SubElement(ghprb, 'skipBuildPhrase').text = str(
+        data.get('skip-build-phrase', '')).lower()
+    XML.SubElement(ghprb, 'onlyTriggerPhrase').text = str(
+        data.get('only-trigger-phrase', False)).lower()
     XML.SubElement(ghprb, 'blackListLabels').text = \
         data.get('blacklist-labels', '')
     XML.SubElement(ghprb, 'whiteListLabels').text = \
         data.get('whitelist-labels', '')
-    XML.SubElement(ghprb, 'onlyTriggerPhrase').text = str(
-        data.get('only-trigger-phrase', False)).lower()
     XML.SubElement(ghprb, 'useGitHubHooks').text = str(
         data.get('github-hooks', False)).lower()
     XML.SubElement(ghprb, 'permitAll').text = str(
@@ -1688,13 +1701,11 @@ def script(registry, xml_parent, data):
         ('script-file-path', 'scriptFilePath', ''),
         ('cron', 'spec', ''),
         ('enable-concurrent', 'enableConcurrentBuild', False),
-        ('exit-code', 'exitCode', 0)
+        ('exit-code', 'exitCode', 0),
+        ('', 'labelRestriction', bool(label)),
+        ('', 'triggerLabel', label),
     ]
-    convert_mapping_to_xml(st, data, mappings, fail_required=True)
-
-    XML.SubElement(st, 'labelRestriction').text = str(bool(label)).lower()
-    if label:
-        XML.SubElement(st, 'triggerLabel').text = label
+    convert_mapping_to_xml(st, data, mappings, fail_required=False)
 
 
 def groovy_script(registry, xml_parent, data):
@@ -1733,6 +1744,7 @@ def groovy_script(registry, xml_parent, data):
     )
     gst.set('plugin', 'scripttrigger')
 
+    label = data.get('label')
     mappings = [
         ('system-script', 'groovySystemScript', False),
         ('script', 'groovyExpression', ''),
@@ -1740,13 +1752,10 @@ def groovy_script(registry, xml_parent, data):
         ('property-file-path', 'propertiesFilePath', ''),
         ('enable-concurrent', 'enableConcurrentBuild', False),
         ('cron', 'spec', ''),
+        ('', 'labelRestriction', bool(label)),
+        ('', 'triggerLabel', label),
     ]
-    convert_mapping_to_xml(gst, data, mappings, fail_required=True)
-
-    label = data.get('label')
-    XML.SubElement(gst, 'labelRestriction').text = str(bool(label)).lower()
-    if label:
-        XML.SubElement(gst, 'triggerLabel').text = label
+    convert_mapping_to_xml(gst, data, mappings, fail_required=False)
 
 
 def rabbitmq(registry, xml_parent, data):
@@ -1767,14 +1776,10 @@ def rabbitmq(registry, xml_parent, data):
         xml_parent,
         'org.jenkinsci.plugins.rabbitmqbuildtrigger.'
         'RemoteBuildTrigger')
-
-    XML.SubElement(rabbitmq, 'spec').text = ''
-
-    try:
-        XML.SubElement(rabbitmq, 'remoteBuildToken').text = str(
-            data.get('token'))
-    except KeyError as e:
-        raise MissingAttributeError(e.args[0])
+    mapping = [
+        ('', 'spec', ''),
+        ('token', 'remoteBuildToken', None)]
+    convert_mapping_to_xml(rabbitmq, data, mapping, fail_required=True)
 
 
 def parameterized_timer(parser, xml_parent, data):
@@ -1797,14 +1802,10 @@ def parameterized_timer(parser, xml_parent, data):
         xml_parent,
         'org.jenkinsci.plugins.parameterizedscheduler.'
         'ParameterizedTimerTrigger')
-
-    XML.SubElement(param_timer, 'spec').text = ''
-
-    try:
-        XML.SubElement(param_timer, 'parameterizedSpecification').text = str(
-            data.get('cron'))
-    except KeyError as e:
-        raise MissingAttributeError(e)
+    mapping = [
+        ('', 'spec', ''),
+        ('cron', 'parameterizedSpecification', None)]
+    convert_mapping_to_xml(param_timer, data, mapping, fail_required=True)
 
 
 class Triggers(jenkins_jobs.modules.base.Base):

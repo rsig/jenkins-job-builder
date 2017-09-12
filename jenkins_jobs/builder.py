@@ -19,7 +19,6 @@ import errno
 import hashlib
 import io
 import logging
-import operator
 import os
 from pprint import pformat
 import re
@@ -28,6 +27,7 @@ import xml.etree.ElementTree as XML
 
 import jenkins
 
+from jenkins_jobs.alphanum import AlphanumSort
 from jenkins_jobs.cache import JobCache
 from jenkins_jobs.constants import MAGIC_MANAGE_STRING
 from jenkins_jobs.parallel import concurrent
@@ -112,7 +112,7 @@ class JenkinsManager(object):
             plugins_list = self.jenkins.get_plugins().values()
 
         except jenkins.JenkinsException as e:
-            if re.search("Connection refused", str(e)):
+            if re.search("(Connection refused|Forbidden)", str(e)):
                 logger.warning(
                     "Unable to retrieve Jenkins Plugin Info from {0},"
                     " using default empty plugins info list.".format(
@@ -194,11 +194,12 @@ class JenkinsManager(object):
             logger.debug("'{0}' has not changed".format(job.name))
         return changed
 
-    def update_jobs(self, xml_jobs, output=None, n_workers=None):
+    def update_jobs(self, xml_jobs, output=None, n_workers=None,
+                    config_xml=False):
         orig = time.time()
 
         logger.info("Number of jobs generated:  %d", len(xml_jobs))
-        xml_jobs.sort(key=operator.attrgetter('name'))
+        xml_jobs.sort(key=AlphanumSort)
 
         if (output and not hasattr(output, 'write') and
                 not os.path.isdir(output)):
@@ -230,7 +231,17 @@ class JenkinsManager(object):
                         raise
                     continue
 
-                output_fn = os.path.join(output, job.name)
+                if config_xml:
+                    output_dir = os.path.join(output, job.name)
+                    logger.info("Creating directory %s" % output_dir)
+                    try:
+                        os.makedirs(output_dir)
+                    except OSError:
+                        if not os.path.isdir(output_dir):
+                            raise
+                    output_fn = os.path.join(output_dir, 'config.xml')
+                else:
+                    output_fn = os.path.join(output, job.name)
                 logger.debug("Writing XML to '{0}'".format(output_fn))
                 with io.open(output_fn, 'w', encoding='utf-8') as f:
                     f.write(job.output().decode('utf-8'))
@@ -344,11 +355,12 @@ class JenkinsManager(object):
             logger.info("Creating jenkins view {0}".format(view_name))
             self.jenkins.create_view(view_name, xml)
 
-    def update_views(self, xml_views, output=None, n_workers=None):
+    def update_views(self, xml_views, output=None, n_workers=None,
+                     config_xml=False):
         orig = time.time()
 
         logger.info("Number of views generated:  %d", len(xml_views))
-        xml_views.sort(key=operator.attrgetter('name'))
+        xml_views.sort(key=AlphanumSort)
 
         if output:
             # ensure only wrapped once
@@ -371,7 +383,17 @@ class JenkinsManager(object):
                         raise
                     continue
 
-                output_fn = os.path.join(output, view.name)
+                if config_xml:
+                    output_dir = os.path.join(output, view.name)
+                    logger.info("Creating directory %s" % output_dir)
+                    try:
+                        os.makedirs(output_dir)
+                    except OSError:
+                        if not os.path.isdir(output_dir):
+                            raise
+                    output_fn = os.path.join(output_dir, 'config.xml')
+                else:
+                    output_fn = os.path.join(output, view.name)
                 logger.debug("Writing XML to '{0}'".format(output_fn))
                 with io.open(output_fn, 'w', encoding='utf-8') as f:
                     f.write(view.output().decode('utf-8'))
